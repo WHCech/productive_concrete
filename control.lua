@@ -32,32 +32,17 @@ local CONCRETE_TILES = {
 }
 
 
-local function is_concrete(tile_name)
-    return CONCRETE_TILES[tile_name] == true
-end
-
 -- Iterate the tiles under an entity and check they are all concrete.
 -- Uses the entity's bounding_box projected onto the tile grid.
 local function entity_fully_on_concrete(entity)
-    local surface = entity.surface
-    local bb      = entity.bounding_box
-
-    -- Convert entity AABB into integer tile coords.
-    -- Tiles are 1x1 squares at integer coordinates.
-    local left    = math.floor(bb.left_top.x)
-    local top     = math.floor(bb.left_top.y)
-    local right   = math.ceil(bb.right_bottom.x) - 1
-    local bottom  = math.ceil(bb.right_bottom.y) - 1
-
-    for x = left, right do
-        for y = top, bottom do
-            local tile = surface.get_tile(x, y)
-            if not (tile and is_concrete(tile.name)) then
-                return false
-            end
+    local tiles   = entity.surface.find_tiles_filtered {
+        area = entity.bounding_box
+    }
+    for i = 1, #tiles do
+        if not CONCRETE_TILES[tiles[i].name] then
+            return false
         end
     end
-
     return true
 end
 
@@ -77,10 +62,10 @@ local function add_bonus(entity)
     local b = storage.concrete_bonus[entity.unit_number]
     if b and b.valid then return end
 
-    local beacon = entity.surface.create_entity{ name=BEACON_NAME, position=entity.position, force=entity.force }
+    local beacon = entity.surface.create_entity { name = BEACON_NAME, position = entity.position, force = entity.force }
     if not (beacon and beacon.valid) then return end
     local inv = beacon.get_module_inventory()
-    if inv then inv.insert{ name=MODULE_NAME, count=1 } end
+    if inv then inv.insert { name = MODULE_NAME, count = 1 } end
 
     storage.concrete_bonus[entity.unit_number] = beacon
 end
