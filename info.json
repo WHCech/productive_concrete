@@ -1,0 +1,10 @@
+{
+  "name": "productive_concrete",
+  "version": "0.1.0",
+  "title": "Productive Concrete ",
+  "author": "Zelaron",
+  "factorio_version": "2.0",
+  "dependencies": [],
+  "description": "This mod adds various benefits to machines placed on concrete.",
+  "space-age_required": false
+}
