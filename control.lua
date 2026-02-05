@@ -31,9 +31,6 @@ local CONCRETE_TILES = {
     ["refined-hazard-concrete-right"] = true,
 }
 
--- local function ensure_storage()
---     storage.concrete_bonus = storage.concrete_bonus or {} -- [machine_unit_number] = true
--- end
 
 local function is_concrete(tile_name)
     return CONCRETE_TILES[tile_name] == true
@@ -74,26 +71,6 @@ local function find_beacon_at(surface, position)
     return nil
 end
 
--- local function add_bonus(entity)
---     if not (entity and entity.valid and entity.unit_number) then return end
---     if storage.concrete_bonus[entity.unit_number] then return end
-
---     -- Create hidden beacon under machine
---     local beacon = entity.surface.create_entity {
---         name = BEACON_NAME,
---         position = entity.position,
---         force = entity.force,
---     }
---     if not (beacon and beacon.valid) then return end
-
---     -- Insert hidden module
---     local inv = beacon.get_module_inventory()
---     if inv then
---         inv.insert { name = MODULE_NAME, count = 1 }
---     end
-
---     storage.concrete_bonus[entity.unit_number] = true
--- end
 
 local function add_bonus(entity)
     if not (entity and entity.valid and entity.unit_number) then return end
@@ -108,18 +85,6 @@ local function add_bonus(entity)
     storage.concrete_bonus[entity.unit_number] = beacon
 end
 
--- local function remove_bonus(entity)
---     if not (entity and entity.valid and entity.unit_number) then return end
---     if not storage.concrete_bonus[entity.unit_number] then return end
-
---     -- Destroy hidden beacon at machine position (cleanup)
---     local beacon = find_beacon_at(entity.surface, entity.position)
---     if beacon and beacon.valid then
---         beacon.destroy()
---     end
-
---     storage.concrete_bonus[entity.unit_number] = nil
--- end
 
 local function remove_bonus(entity)
     if not (entity and entity.valid and entity.unit_number) then return end
