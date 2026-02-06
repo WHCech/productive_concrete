@@ -78,7 +78,8 @@ local function update_beacon_bonus(beacon, buff_effet)
         local inv = beacon.get_module_inventory()
         if inv then
             if buff_effet then
-                inv[1].set_stack { name = buff_effet, count = 1 }
+                inv.clear()
+                inv.insert { name = buff_effet, count = 1 }
             else
                 inv.clear()
             end
@@ -143,7 +144,7 @@ end
 ---comment
 ---@param surface LuaSurface
 ---@param area table
-local function recompute_mashines_in_area(surface, area)
+local function recompute_machines_in_area(surface, area)
     if not surface then return end
     if not area then return end
 
@@ -157,6 +158,19 @@ local function recompute_mashines_in_area(surface, area)
         local buff_effect = entity_effect_underfoot(m)
         if beacon then
             update_beacon_bonus(beacon, buff_effect)
+        end
+    end
+end
+
+local function build_tile_items_set()
+    storage.tile_items =  {}
+
+    for _, tile in pairs(prototypes.tile) do
+        local items = tile.items_to_place_this
+        if items then
+            for _, item in pairs(items) do
+                storage.tile_items[item.name] = true
+            end
         end
     end
 end
@@ -227,20 +241,20 @@ local function on_tiles_changed(event)
     local s = storage.last_pre_build[event.player_index]
     if s and ((game.tick - s.last_tick) < SUPPRESS_TICKS) then
         local coords = storage.suppressed_tiles[event.player_index][event.surface_index] or {}
-        local old_minx = coords.minx or s.position.x
-        local old_miny = coords.miny or s.position.y
-        local old_maxx = coords.maxx or s.position.x
-        local old_maxy = coords.maxy or s.position.y
+        local new_minx = coords.minx or s.position.x
+        local new_miny = coords.miny or s.position.y
+        local new_maxx = coords.maxx or s.position.x
+        local new_maxy = coords.maxy or s.position.y
         local tiles = event.tiles
 
         for i = 1, #tiles do
             local p = tiles[i].position
             local x, y = p.x, p.y
 
-            new_minx = math.min(old_minx, x)
-            new_miny = math.min(old_miny, y)
-            new_maxx = math.max(old_maxx, x)
-            new_maxy = math.max(old_maxy, y)
+            new_minx = math.min(new_minx, x)
+            new_miny = math.min(new_miny, y)
+            new_maxx = math.max(new_maxx, x)
+            new_maxy = math.max(new_maxy, y)
         end
         storage.suppressed_tiles[event.player_index][event.surface_index] = {
             minx = new_minx,
@@ -271,12 +285,25 @@ local function custom_handler_editor_instant_deconstruct(event)
     local area = event.area
     if not area then return end
 
-    recompute_mashines_in_area(surface, area)
+    recompute_machines_in_area(surface, area)
 end
 
 --------------------------------------------------------------------------------
 -- Editor instant_blueprint_building
 --------------------------------------------------------------------------------
+---comment
+---@param blueprint LuaItemStack
+local function get_tile_count_from_bp(blueprint)
+    local total_count = 0
+
+    for _, item in pairs(blueprint.cost_to_build) do
+        if storage.tile_items[item.name] then
+            total_count = total_count + item.count
+        end
+    end
+    return total_count
+end
+
 
 local function get_tile_count(event)
     local player = game.get_player(event.player_index)
@@ -288,8 +315,11 @@ local function get_tile_count(event)
         return
     end
 
-    local tiles = bp.get_blueprint_tiles()
-    storage.bp_tilecount[event.player_index] = tiles and #tiles or 0
+    local tiles = get_tile_count_from_bp(bp)
+    if tiles == 0 then
+        tiles = #bp.get_blueprint_tiles()
+    end
+    storage.bp_tilecount[event.player_index] = tiles or 0
 end
 
 local function on_pre_build(event)
@@ -325,7 +355,7 @@ local function on_tick(event)
                 for surface_index, coords in pairs(surfaces) do
                     local bb = { { coords.minx, coords.miny }, { coords.maxx, coords.maxy } }
                     local surface = game.surfaces[surface_index]
-                    recompute_mashines_in_area(surface, bb)
+                    recompute_machines_in_area(surface, bb)
                 end
             end
 
@@ -344,23 +374,12 @@ local function ensure_storage()
     storage.last_pre_build = storage.last_pre_build or {}
     storage.suppressed_tiles = storage.suppressed_tiles or {}
     storage.run_area_recompute_at = storage.run_area_recompute_at or {}
+    build_tile_items_set()
 end
-ensure_storage()
-script.on_init(function()
-    storage.entity_personal_beacon = storage.entity_personal_beacon or {}
-    storage.bp_tilecount = storage.bp_tilecount or {}
-    storage.last_pre_build = storage.last_pre_build or {}
-    storage.suppressed_tiles = storage.suppressed_tiles or {}
-    storage.run_area_recompute_at = storage.run_area_recompute_at or {}
-end)
 
-script.on_configuration_changed(function()
-    storage.entity_personal_beacon = storage.entity_personal_beacon or {}
-    storage.bp_tilecount = storage.bp_tilecount or {}
-    storage.last_pre_build = storage.last_pre_build or {}
-    storage.suppressed_tiles = storage.suppressed_tiles or {}
-    storage.run_area_recompute_at = storage.run_area_recompute_at or {}
-end)
+script.on_init(ensure_storage)
+
+script.on_configuration_changed(ensure_storage)
 
 --------------------------------------------------------------------------------
 -- Events
