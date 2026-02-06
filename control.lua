@@ -59,8 +59,8 @@ local function entity_effect_underfoot(entity)
     local n = #tiles
     if n == 0 then return nil end
 
-    local name0 = tiles[1].name
-    local buff_effect = CONCRETE_TILES[name0]
+
+    local buff_effect = CONCRETE_TILES[tiles[1].name]
     if not buff_effect then return nil end
     for i = 2, n do
         if CONCRETE_TILES[tiles[i].name] ~= buff_effect then
@@ -411,10 +411,6 @@ script.on_event(defines.events.on_player_deconstructed_area, custom_handler_edit
 script.on_event(defines.events.on_player_cursor_stack_changed, get_tile_count)
 script.on_event(defines.events.on_pre_build, on_pre_build)
 script.on_event(defines.events.on_tick, on_tick)
-
-
-
-
 
 
 --defines.events.on_undo_applied
