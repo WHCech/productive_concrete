@@ -115,10 +115,28 @@ local function update_machines_near_tiles(surface, tiles)
     end
 end
 
+
+
 local function get_cursor_blueprint(player)
     local cs = player.cursor_stack
     if not (cs and cs.valid_for_read) then return nil end
     if cs.is_blueprint then return cs end
+
+
+    if cs.is_blueprint_book then
+        local idx = cs.active_index
+        if not idx then return nil end
+
+        local inv = cs.get_inventory(defines.inventory.item_main)
+        if not inv then return nil end
+
+        local bp = inv[idx]
+        if bp and bp.valid_for_read and bp.is_blueprint then
+            return bp
+        end
+    end
+
+
     return nil
 end
 
@@ -305,7 +323,7 @@ local function on_tick(event)
             local surfaces = storage.suppressed_tiles and storage.suppressed_tiles[player_index]
             if surfaces then
                 for surface_index, coords in pairs(surfaces) do
-                    local bb = {{coords.minx,coords.miny},{coords.maxx,coords.maxy}}
+                    local bb = { { coords.minx, coords.miny }, { coords.maxx, coords.maxy } }
                     local surface = game.surfaces[surface_index]
                     recompute_mashines_in_area(surface, bb)
                 end
