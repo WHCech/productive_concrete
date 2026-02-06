@@ -163,7 +163,7 @@ local function recompute_machines_in_area(surface, area)
 end
 
 local function build_tile_items_set()
-    storage.tile_items =  {}
+    storage.tile_items = {}
 
     for _, tile in pairs(prototypes.tile) do
         local items = tile.items_to_place_this
@@ -235,33 +235,33 @@ end
 --------------------------------------------------------------------------------
 
 local function on_tiles_changed(event)
-    local surface = game.surfaces[event.surface_index]
+    local surface_index = event.surface_index
+    local surface = game.surfaces[surface_index]
     if not surface then return end
+    local player_index = event.player_index
 
-    local s = storage.last_pre_build[event.player_index]
+
+    local s = storage.last_pre_build[player_index]
     if s and ((game.tick - s.last_tick) < SUPPRESS_TICKS) then
-        local coords = storage.suppressed_tiles[event.player_index][event.surface_index] or {}
-        local new_minx = coords.minx or s.position.x
-        local new_miny = coords.miny or s.position.y
-        local new_maxx = coords.maxx or s.position.x
-        local new_maxy = coords.maxy or s.position.y
-        local tiles = event.tiles
+        local suppressed_tiles = storage.suppressed_tiles[player_index]
+        local coords = suppressed_tiles[surface_index] or {}
 
+        local minx, miny, maxx, maxy = coords.minx, coords.miny, coords.maxx, coords.maxy
+        if not minx then
+            local p = s.position
+            minx, miny, maxx, maxy = p.x, p.y, p.x, p.y
+        end
+
+        local tiles = event.tiles
         for i = 1, #tiles do
             local p = tiles[i].position
             local x, y = p.x, p.y
-
-            new_minx = math.min(new_minx, x)
-            new_miny = math.min(new_miny, y)
-            new_maxx = math.max(new_maxx, x)
-            new_maxy = math.max(new_maxy, y)
+            if x < minx then minx = x elseif x > maxx then maxx = x end
+            if y < miny then miny = y elseif y > maxy then maxy = y end
         end
-        storage.suppressed_tiles[event.player_index][event.surface_index] = {
-            minx = new_minx,
-            miny = new_miny,
-            maxx = new_maxx,
-            maxy = new_maxy,
-        }
+
+        suppressed_tiles[surface_index] = coords
+        coords.minx, coords.miny, coords.maxx, coords.maxy = minx, miny, maxx, maxy
         return
     end
 
