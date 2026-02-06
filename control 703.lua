@@ -206,33 +206,6 @@ local function on_tiles_changed(event)
     local surface = game.surfaces[event.surface_index]
     if not surface then return end
 
-    local s = storage.last_pre_build[event.player_index]
-    if s and ((game.tick - s.last_tick) < SUPPRESS_TICKS) then
-        local coords = storage.suppressed_tiles[event.player_index][event.surface_index] or {}
-        local old_minx = coords.minx or s.position.x
-        local old_miny = coords.miny or s.position.y
-        local old_maxx = coords.maxx or s.position.x
-        local old_maxy = coords.maxy or s.position.y
-        local tiles = event.tiles
-
-        for i = 1, #tiles do
-            local p = tiles[i].position
-            local x, y = p.x, p.y
-
-            new_minx = math.min(old_minx, x)
-            new_miny = math.min(old_miny, y)
-            new_maxx = math.max(old_maxx, x)
-            new_maxy = math.max(old_maxy, y)
-        end
-        storage.suppressed_tiles[event.player_index][event.surface_index] = {
-            minx = new_minx,
-            miny = new_miny,
-            maxx = new_maxx,
-            maxy = new_maxy,
-        }
-        return
-    end
-
     update_machines_near_tiles(surface, event.tiles)
 end
 
@@ -371,9 +344,9 @@ script.on_event(defines.events.script_raised_destroy, on_entity_removed, BUILD_F
 script.on_event(defines.events.on_player_deconstructed_area, custom_handler_editor_instant_deconstruct)
 
 --Instant instant_blueprint_building
-script.on_event(defines.events.on_player_cursor_stack_changed, get_tile_count)
-script.on_event(defines.events.on_pre_build, on_pre_build)
-script.on_event(defines.events.on_tick, on_tick)
+-- script.on_event(defines.events.on_player_cursor_stack_changed, get_tile_count)
+-- script.on_event(defines.events.on_pre_build, on_pre_build)
+-- script.on_event(defines.events.on_tick, on_tick)
 
 
 

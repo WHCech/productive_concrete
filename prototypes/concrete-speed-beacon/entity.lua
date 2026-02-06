@@ -1,7 +1,7 @@
 data:extend({
   {
     type = "beacon",
-    name = "concrete-speed-beacon",
+    name = "concrete-beacon",
     icon = "__base__/graphics/icons/beacon.png",
     icon_size = 64,
 
@@ -30,7 +30,7 @@ data:extend({
     energy_usage = "1W",
 
     module_slots = 1,
-    allowed_effects = { "speed" },
+    allowed_effects = { "speed", "productivity" },
 
     radius_visualisation_picture = {
       filename = "__core__/graphics/empty.png",
