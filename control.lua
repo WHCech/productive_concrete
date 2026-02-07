@@ -53,150 +53,6 @@ local TILE_ITEMS = {}
 
 ---comment
 ---@param entity LuaEntity
-local function entity_effect_underfoot(entity)
-    local tiles = entity.surface.find_tiles_filtered {
-        area = entity.bounding_box
-    }
-    local n = #tiles
-    if n == 0 then return nil end
-
-
-    local buff_effect = CONCRETE_TILES[tiles[1].name]
-    if not buff_effect then return nil end
-    for i = 2, n do
-        if CONCRETE_TILES[tiles[i].name] ~= buff_effect then
-            return nil
-        end
-    end
-
-    return buff_effect
-end
----comment
----@param beacon LuaEntity
----@param buff_effect string|nil
-local function update_beacon_bonus(beacon, buff_effect)
-    if beacon and beacon.valid then
-        local inv = beacon.get_module_inventory()
-        assert(
-            inv,
-            "Beacon has no module inventory\n" .. serpent.block(beacon)
-        )
-        if buff_effect then
-            inv.clear()
-            inv.insert { name = buff_effect, count = 1 }
-        else
-            inv.clear()
-        end
-
-        return
-    end
-end
----comment
----@param surface LuaSurface
----@param tiles LuaTile
-local function update_machines_near_tiles(surface, tiles)
-    if not (surface and tiles) then return end
-
-    local seen = {}
-
-    for _, t in ipairs(tiles) do
-        local p = t.position
-        local area = { { p.x, p.y }, { p.x + 1, p.y + 1 } }
-
-        local machines = surface.find_entities_filtered {
-            area = area,
-            type = QUALIFYING_TYPE_LIST,
-        }
-
-        for _, m in ipairs(machines) do
-            if m.valid and m.unit_number and not seen[m.unit_number] then
-                seen[m.unit_number] = true
-                local beacon = storage.entity_personal_beacon[m.unit_number]
-                local buff_effect = entity_effect_underfoot(m)
-                update_beacon_bonus(beacon, buff_effect)
-            end
-        end
-    end
-end
-
-
-
-local function get_cursor_blueprint(player)
-    local cs = player.cursor_stack
-    if not (cs and cs.valid_for_read) then return nil end
-    if cs.is_blueprint then return cs end
-
-
-    if cs.is_blueprint_book then
-        local idx = cs.active_index
-        if not idx then return nil end
-
-        local inv = cs.get_inventory(defines.inventory.item_main)
-        if not inv then return nil end
-
-        local bp = inv[idx]
-        if bp and bp.valid_for_read and bp.is_blueprint then
-            return bp
-        end
-    end
-
-
-    return nil
-end
-
----comment
----@param surface LuaSurface
----@param area table
-local function recompute_machines_in_area(surface, area)
-    if not (surface and area) then return end
-
-    local machines = surface.find_entities_filtered {
-        area = area,
-        type = QUALIFYING_TYPE_LIST
-    }
-
-    for _, m in ipairs(machines) do
-        local beacon = storage.entity_personal_beacon[m.unit_number]
-        local buff_effect = entity_effect_underfoot(m)
-        if beacon then
-            update_beacon_bonus(beacon, buff_effect)
-        end
-    end
-end
-
-local function build_tile_items_set()
-    local tile_items = {}
-
-    for _, tile in pairs(prototypes.tile) do
-        local items = tile.items_to_place_this
-        if items then
-            for _, item in pairs(items) do
-                tile_items[item.name] = true
-            end
-        end
-    end
-    return tile_items
-end
-
----comment
----@param blueprint LuaItemStack
-local function get_tile_count_from_bp(blueprint)
-    local total_count = 0
-
-    for _, item in pairs(blueprint.cost_to_build) do
-        if TILE_ITEMS[item.name] then
-            total_count = total_count + item.count
-        end
-    end
-    return total_count
-end
-
---------------------------------------------------------------------------------
--- Beacon lifecycle
---------------------------------------------------------------------------------
-
----comment
----@param entity LuaEntity
 local function create_personal_beacon(entity)
     if not (entity and entity.valid and entity.unit_number) then return end
 
@@ -251,6 +107,150 @@ local function destroy_personal_beacon(entity)
         ))
     end
     storage.entity_personal_beacon[entity.unit_number] = nil
+end
+
+---comment
+---@param entity LuaEntity
+local function entity_effect_underfoot(entity)
+    local tiles = entity.surface.find_tiles_filtered {
+        area = entity.bounding_box
+    }
+    local n = #tiles
+    if n == 0 then return nil end
+
+
+    local buff_effect = CONCRETE_TILES[tiles[1].name]
+    if not buff_effect then return nil end
+    for i = 2, n do
+        if CONCRETE_TILES[tiles[i].name] ~= buff_effect then
+            return nil
+        end
+    end
+
+    return buff_effect
+end
+
+---comment
+---@param beacon LuaEntity
+---@param buff_effect string|nil
+local function update_beacon_bonus(beacon, buff_effect)
+    if not (beacon and beacon.valid) then return end
+
+    local inv = beacon.get_module_inventory()
+    assert(
+        inv,
+        "Beacon has no module inventory\n" .. serpent.block(beacon)
+    )
+    if buff_effect then
+        inv.clear()
+        inv.insert { name = buff_effect, count = 1 }
+    else
+        inv.clear()
+    end
+end
+
+---comment
+---@param surface LuaSurface
+---@param tiles LuaTile
+local function update_machines_near_tiles(surface, tiles)
+    if not (surface and tiles) then return end
+
+    local seen = {}
+
+    for _, t in ipairs(tiles) do
+        local p = t.position
+        local area = { { p.x, p.y }, { p.x + 1, p.y + 1 } }
+
+        local machines = surface.find_entities_filtered {
+            area = area,
+            type = QUALIFYING_TYPE_LIST,
+        }
+
+        for _, m in ipairs(machines) do
+            if m.valid and m.unit_number and not seen[m.unit_number] then
+                seen[m.unit_number] = true
+                local beacon = storage.entity_personal_beacon[m.unit_number]
+                local buff_effect = entity_effect_underfoot(m)
+                update_beacon_bonus(beacon, buff_effect)
+            end
+        end
+    end
+end
+
+---comment
+---@param surface LuaSurface
+---@param area table
+local function recompute_machines_in_area(surface, area)
+    if not (surface and area) then return end
+
+    local machines = surface.find_entities_filtered {
+        area = area,
+        type = QUALIFYING_TYPE_LIST
+    }
+
+    for _, m in ipairs(machines) do
+        local buff_effect = entity_effect_underfoot(m)
+        local beacon = storage.entity_personal_beacon[m.unit_number]
+        if not (beacon and beacon.valid) then
+            beacon = create_personal_beacon(m)
+            assert(
+                beacon and beacon.valid,
+                "Beacon creation failed\n" .. serpent.block(m)
+            )
+            storage.entity_personal_beacon[m.unit_number] = beacon
+        end
+        update_beacon_bonus(beacon, buff_effect)
+    end
+end
+
+local function get_cursor_blueprint(player)
+    local cs = player.cursor_stack
+    if not (cs and cs.valid_for_read) then return nil end
+    if cs.is_blueprint then return cs end
+
+
+    if cs.is_blueprint_book then
+        local idx = cs.active_index
+        if not idx then return nil end
+
+        local inv = cs.get_inventory(defines.inventory.item_main)
+        if not inv then return nil end
+
+        local bp = inv[idx]
+        if bp and bp.valid_for_read and bp.is_blueprint then
+            return bp
+        end
+    end
+
+
+    return nil
+end
+
+local function build_tile_items_set()
+    local tile_items = {}
+
+    for _, tile in pairs(prototypes.tile) do
+        local items = tile.items_to_place_this
+        if items then
+            for _, item in pairs(items) do
+                tile_items[item.name] = true
+            end
+        end
+    end
+    return tile_items
+end
+
+---comment
+---@param blueprint LuaItemStack
+local function get_tile_count_from_bp(blueprint)
+    local total_count = 0
+
+    for _, item in pairs(blueprint.cost_to_build) do
+        if TILE_ITEMS[item.name] then
+            total_count = total_count + item.count
+        end
+    end
+    return total_count
 end
 
 --------------------------------------------------------------------------------
@@ -391,7 +391,7 @@ local function on_undo(event)
 
             assert(
                 surface_index == a.surface_index,
-                "Undo affected multiple surfaces\n" .. serpent.block(event)
+                "Undo affected multiple surfaces\n" .. surface_index .. " : " .. a.surface_index
             )
 
             local p = a.position
@@ -428,13 +428,14 @@ local function on_tick(event)
             local surfaces = storage.suppressed_tiles and storage.suppressed_tiles[player_index]
             if surfaces then
                 for surface_index, coords in pairs(surfaces) do
-                    local bb = { { coords.minx, coords.miny }, { coords.maxx+1, coords.maxy+1 } }
+                    local bb = { { coords.minx, coords.miny }, { coords.maxx + 1, coords.maxy + 1 } }
                     local surface = game.surfaces[surface_index]
                     recompute_machines_in_area(surface, bb)
                 end
             end
 
             storage.run_area_recompute_at[player_index] = nil
+            storage.suppressed_tiles[player_index] = nil
         end
     end
 end
