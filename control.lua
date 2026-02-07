@@ -4,7 +4,7 @@
 
 local BEACON_NAME = "concrete-beacon"
 
-local BP_TILE_THRESHOLD = 1
+local BP_TILE_THRESHOLD = 3000
 local SUPPRESS_TICKS = 5
 local DELAY_TICKS = 5
 
@@ -46,6 +46,7 @@ local CONCRETE_TILES = {
     ["refined-hazard-concrete-right"] = "refined-hazard-concrete-prod-module",
 }
 
+local TILE_ITEMS = {}
 --------------------------------------------------------------------------------
 -- Helpers
 --------------------------------------------------------------------------------
@@ -72,17 +73,19 @@ local function entity_effect_underfoot(entity)
 end
 ---comment
 ---@param beacon LuaEntity
----@param buff_effet string|nil
-local function update_beacon_bonus(beacon, buff_effet)
+---@param buff_effect string|nil
+local function update_beacon_bonus(beacon, buff_effect)
     if beacon and beacon.valid then
         local inv = beacon.get_module_inventory()
-        if inv then
-            if buff_effet then
-                inv.clear()
-                inv.insert { name = buff_effet, count = 1 }
-            else
-                inv.clear()
-            end
+        assert(
+            inv,
+            "Beacon has no module inventory\n" .. serpent.block(beacon)
+        )
+        if buff_effect then
+            inv.clear()
+            inv.insert { name = buff_effect, count = 1 }
+        else
+            inv.clear()
         end
 
         return
@@ -145,8 +148,7 @@ end
 ---@param surface LuaSurface
 ---@param area table
 local function recompute_machines_in_area(surface, area)
-    if not surface then return end
-    if not area then return end
+    if not (surface and area) then return end
 
     local machines = surface.find_entities_filtered {
         area = area,
@@ -163,16 +165,30 @@ local function recompute_machines_in_area(surface, area)
 end
 
 local function build_tile_items_set()
-    storage.tile_items = {}
+    local tile_items = {}
 
     for _, tile in pairs(prototypes.tile) do
         local items = tile.items_to_place_this
         if items then
             for _, item in pairs(items) do
-                storage.tile_items[item.name] = true
+                tile_items[item.name] = true
             end
         end
     end
+    return tile_items
+end
+
+---comment
+---@param blueprint LuaItemStack
+local function get_tile_count_from_bp(blueprint)
+    local total_count = 0
+
+    for _, item in pairs(blueprint.cost_to_build) do
+        if TILE_ITEMS[item.name] then
+            total_count = total_count + item.count
+        end
+    end
+    return total_count
 end
 
 --------------------------------------------------------------------------------
@@ -203,11 +219,37 @@ end
 local function destroy_personal_beacon(entity)
     if not (entity and entity.unit_number) then return end
     local beacon = storage.entity_personal_beacon[entity.unit_number]
-    if not beacon then return end
-    if beacon.valid then
+    if beacon and beacon.valid then
         beacon.destroy()
+        storage.entity_personal_beacon[entity.unit_number] = nil
+        return
     end
 
+    local surface = entity.surface
+    local pos = entity.position
+
+    local found = surface.find_entities_filtered {
+        position = pos,
+        name = BEACON_NAME
+    }
+    local count = 0
+    for i = 1, #found do
+        local b = found[i]
+        if b.valid then
+            b.destroy()
+            count = count + 1
+        end
+    end
+
+    if count > 1 then
+        log(string.format(
+            "[Productive Concrete] Multiple stray beacons (%d) at (%.1f, %.1f) on surface %s for unit %d",
+            count,
+            pos.x, pos.y,
+            surface.name,
+            entity.unit_number
+        ))
+    end
     storage.entity_personal_beacon[entity.unit_number] = nil
 end
 
@@ -219,8 +261,11 @@ local function on_entity_build(event)
     local entity = event.created_entity or event.entity or event.destination
     if not (entity and entity.valid) then return end
     local beacon = create_personal_beacon(entity)
+    assert(
+        beacon and beacon.valid,
+        "Beacon creation failed\n" .. serpent.block(entity)
+    )
     local buff_effect = entity_effect_underfoot(entity)
-    if not beacon then return end
     update_beacon_bonus(beacon, buff_effect)
 end
 
@@ -238,9 +283,8 @@ local function on_tiles_changed(event)
     local surface_index = event.surface_index
     local surface = game.surfaces[surface_index]
     if not surface then return end
+
     local player_index = event.player_index
-
-
     local s = storage.last_pre_build[player_index]
     if s and ((game.tick - s.last_tick) < SUPPRESS_TICKS) then
         local suppressed_tiles = storage.suppressed_tiles[player_index]
@@ -291,19 +335,6 @@ end
 --------------------------------------------------------------------------------
 -- Editor instant_blueprint_building
 --------------------------------------------------------------------------------
----comment
----@param blueprint LuaItemStack
-local function get_tile_count_from_bp(blueprint)
-    local total_count = 0
-
-    for _, item in pairs(blueprint.cost_to_build) do
-        if storage.tile_items[item.name] then
-            total_count = total_count + item.count
-        end
-    end
-    return total_count
-end
-
 
 local function get_tile_count(event)
     local player = game.get_player(event.player_index)
@@ -317,7 +348,7 @@ local function get_tile_count(event)
 
     local tiles = get_tile_count_from_bp(bp)
     if tiles == 0 then
-        tiles = #bp.get_blueprint_tiles()
+        tiles = #(bp.get_blueprint_tiles() or {})
     end
     storage.bp_tilecount[event.player_index] = tiles or 0
 end
@@ -341,6 +372,50 @@ local function on_pre_build(event)
 end
 
 --------------------------------------------------------------------------------
+-- Editor Undo
+--------------------------------------------------------------------------------
+
+local function on_undo(event)
+    local player = game.get_player(event.player_index)
+    if not player then return end
+
+    local controller_type = player.controller_type
+    if not (controller_type and controller_type == defines.controllers.editor) then return end
+
+    local minx, miny, maxx, maxy
+    local surface_index
+
+    for _, a in ipairs(event.actions) do
+        if a.type == "built-tile" then
+            surface_index = surface_index or a.surface_index
+
+            assert(
+                surface_index == a.surface_index,
+                "Undo affected multiple surfaces\n" .. serpent.block(event)
+            )
+
+            local p = a.position
+            local x, y = p.x, p.y
+
+            if not minx then
+                minx, miny, maxx, maxy = x, y, x, y
+            else
+                if x < minx then minx = x elseif x > maxx then maxx = x end
+                if y < miny then miny = y elseif y > maxy then maxy = y end
+            end
+        end
+    end
+
+    if not minx then return end
+
+    local surface = game.surfaces[surface_index]
+    if not surface then return end
+
+    local area = { { minx, miny }, { maxx + 1, maxy + 1 } }
+    recompute_machines_in_area(surface, area)
+end
+
+--------------------------------------------------------------------------------
 -- Editor on TIck
 --------------------------------------------------------------------------------
 
@@ -353,7 +428,7 @@ local function on_tick(event)
             local surfaces = storage.suppressed_tiles and storage.suppressed_tiles[player_index]
             if surfaces then
                 for surface_index, coords in pairs(surfaces) do
-                    local bb = { { coords.minx, coords.miny }, { coords.maxx, coords.maxy } }
+                    local bb = { { coords.minx, coords.miny }, { coords.maxx+1, coords.maxy+1 } }
                     local surface = game.surfaces[surface_index]
                     recompute_machines_in_area(surface, bb)
                 end
@@ -374,12 +449,25 @@ local function ensure_storage()
     storage.last_pre_build = storage.last_pre_build or {}
     storage.suppressed_tiles = storage.suppressed_tiles or {}
     storage.run_area_recompute_at = storage.run_area_recompute_at or {}
-    build_tile_items_set()
 end
 
-script.on_init(ensure_storage)
+local function rebuild_runtime()
+    TILE_ITEMS = build_tile_items_set()
+end
 
-script.on_configuration_changed(ensure_storage)
+script.on_init(function()
+    ensure_storage()
+    rebuild_runtime()
+end)
+
+script.on_configuration_changed(function()
+    ensure_storage()
+    rebuild_runtime()
+end)
+
+script.on_load(function()
+    rebuild_runtime()
+end)
 
 --------------------------------------------------------------------------------
 -- Events
@@ -412,5 +500,5 @@ script.on_event(defines.events.on_player_cursor_stack_changed, get_tile_count)
 script.on_event(defines.events.on_pre_build, on_pre_build)
 script.on_event(defines.events.on_tick, on_tick)
 
-
---defines.events.on_undo_applied
+--Editor Undo
+script.on_event(defines.events.on_undo_applied, on_undo)
