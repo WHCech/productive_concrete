@@ -34,17 +34,76 @@ end
 -- Tile -> effect mapping
 --------------------------------------------------------------------------------
 
-local CONCRETE_TILES = {
-    ["concrete"]                      = "concrete-speed-module",
+local CONCRETE_TILES = {}
 
-    ["refined-concrete"]              = "refined-concrete-speed-module",
+if script.active_mods["quality_concrete"] and settings.startup["productive_concrete_enable_quality_scaling"] and settings.startup["productive_concrete_enable_quality_scaling"].value then
+    local MODULE_FOR_BASE = {
+        ["concrete"]         = "concrete-module",
+        ["refined-concrete"] = "refined-concrete-module",
+    }
 
-    ["hazard-concrete-left"]          = "hazard-concrete-prod-module",
-    ["hazard-concrete-right"]         = "hazard-concrete-prod-module",
+    local function parse_quality_tile(name, base)
+        local prefix = base .. "-quality-"
+        if name:sub(1, #prefix) ~= prefix then return nil end
+        -- everything after "<base>-quality-" is the quality name
+        return name:sub(#prefix + 1)
+    end
 
-    ["refined-hazard-concrete-left"]  = "refined-hazard-concrete-prod-module",
-    ["refined-hazard-concrete-right"] = "refined-hazard-concrete-prod-module",
-}
+    for tile_name, _ in pairs(prototypes.tile) do
+        local q
+
+        q = parse_quality_tile(tile_name, "concrete")
+        if q then
+            CONCRETE_TILES[tile_name] = { module = MODULE_FOR_BASE["concrete"], quality = q, family = "concrete" }
+        else
+            q = parse_quality_tile(tile_name, "refined-concrete")
+            if q then
+                CONCRETE_TILES[tile_name] = {
+                    module = MODULE_FOR_BASE["refined-concrete"],
+                    quality = q,
+                    family =
+                    "refined-concrete"
+                }
+            else
+                q = parse_quality_tile(tile_name, "hazard-concrete-left") or
+                    parse_quality_tile(tile_name, "hazard-concrete-right")
+                if q then
+                    CONCRETE_TILES[tile_name] = {
+                        module = "hazard-concrete-module",
+                        quality = q,
+                        family =
+                        "hazard-concrete"
+                    }
+                else
+                    q = parse_quality_tile(tile_name, "refined-hazard-concrete-left") or
+                        parse_quality_tile(tile_name, "refined-hazard-concrete-right")
+                    if q then
+                        CONCRETE_TILES[tile_name] = {
+                            module = "refined-hazard-concrete-module",
+                            quality = q,
+                            family =
+                            "refined-hazard-concrete"
+                        }
+                    end
+                end
+            end
+        end
+    end
+else
+    CONCRETE_TILES = {
+        ["concrete"]                      = "concrete-module",
+
+        ["refined-concrete"]              = "refined-concrete-module",
+
+        ["hazard-concrete-left"]          = "hazard-concrete-module",
+        ["hazard-concrete-right"]         = "hazard-concrete-module",
+
+        ["refined-hazard-concrete-left"]  = "refined-hazard-concrete-module",
+        ["refined-hazard-concrete-right"] = "refined-hazard-concrete-module",
+    }
+end
+
+
 
 local TILE_ITEMS = {}
 --------------------------------------------------------------------------------
@@ -112,38 +171,49 @@ end
 ---comment
 ---@param entity LuaEntity
 local function entity_effect_underfoot(entity)
-    local tiles = entity.surface.find_tiles_filtered {
-        area = entity.bounding_box
-    }
+    local tiles = entity.surface.find_tiles_filtered { area = entity.bounding_box }
     local n = #tiles
-    if n == 0 then return nil end
+    if n == 0 then
+        return nil, nil
+    end
 
+    local function unpack_effect(v)
+        if not v then return nil, nil end
+        if type(v) == "table" then
+            return v.module, v.quality
+        end
+        -- string mapping (no quality info)
+        return v, nil
+    end
 
-    local buff_effect = CONCRETE_TILES[tiles[1].name]
-    if not buff_effect then return nil end
+    local first = tiles[1]
+    local first_val = CONCRETE_TILES[first.name]
+    local first_module, first_quality = unpack_effect(first_val)
+    if not first_module then
+        return nil, nil
+    end
+
     for i = 2, n do
-        if CONCRETE_TILES[tiles[i].name] ~= buff_effect then
-            return nil
+        local v = CONCRETE_TILES[tiles[i].name]
+        local m, q = unpack_effect(v)
+
+        -- must be fully covered by the same material AND same quality
+        if m ~= first_module or q ~= first_quality then
+            return nil, nil
         end
     end
 
-    return buff_effect
+    return first_module, first_quality
 end
 
 ---comment
 ---@param beacon LuaEntity
 ---@param buff_effect string|nil
-local function update_beacon_bonus(beacon, buff_effect)
-    if not (beacon and beacon.valid) then return end
-
+local function update_beacon_bonus(beacon, buff_effect, quality)
     local inv = beacon.get_module_inventory()
-    assert(
-        inv,
-        "Beacon has no module inventory\n" .. serpent.block(beacon)
-    )
+
     if buff_effect then
-        inv.clear()
-        inv.insert { name = buff_effect, count = 1 }
+        inv[1].set_stack { name = buff_effect, count = 1, quality = quality }
     else
         inv.clear()
     end
@@ -170,8 +240,8 @@ local function update_machines_near_tiles(surface, tiles)
             if m.valid and m.unit_number and not seen[m.unit_number] then
                 seen[m.unit_number] = true
                 local beacon = storage.entity_personal_beacon[m.unit_number]
-                local buff_effect = entity_effect_underfoot(m)
-                update_beacon_bonus(beacon, buff_effect)
+                local buff_effect, quality = entity_effect_underfoot(m)
+                update_beacon_bonus(beacon, buff_effect, quality)
             end
         end
     end
@@ -189,17 +259,14 @@ local function recompute_machines_in_area(surface, area)
     }
 
     for _, m in ipairs(machines) do
-        local buff_effect = entity_effect_underfoot(m)
+        local buff_effect, quality = entity_effect_underfoot(m)
         local beacon = storage.entity_personal_beacon[m.unit_number]
         if not (beacon and beacon.valid) then
             beacon = create_personal_beacon(m)
-            assert(
-                beacon and beacon.valid,
-                "Beacon creation failed\n" .. serpent.block(m)
-            )
+
             storage.entity_personal_beacon[m.unit_number] = beacon
         end
-        update_beacon_bonus(beacon, buff_effect)
+        update_beacon_bonus(beacon, buff_effect, quality)
     end
 end
 
@@ -261,12 +328,9 @@ local function on_entity_build(event)
     local entity = event.created_entity or event.entity or event.destination
     if not (entity and entity.valid) then return end
     local beacon = create_personal_beacon(entity)
-    assert(
-        beacon and beacon.valid,
-        "Beacon creation failed\n" .. serpent.block(entity)
-    )
-    local buff_effect = entity_effect_underfoot(entity)
-    update_beacon_bonus(beacon, buff_effect)
+
+    local buff_effect, quality = entity_effect_underfoot(entity)
+    update_beacon_bonus(beacon, buff_effect, quality)
 end
 
 local function on_entity_removed(event)
@@ -281,8 +345,7 @@ end
 
 local function on_tiles_changed(event)
     local surface_index = event.surface_index
-    local surface = game.surfaces[surface_index]
-    if not surface then return end
+    
 
     local player_index = event.player_index
     local s = storage.last_pre_build[player_index]
@@ -309,6 +372,8 @@ local function on_tiles_changed(event)
         return
     end
 
+    local surface = game.surfaces[surface_index]
+    if not surface then return end
     update_machines_near_tiles(surface, event.tiles)
 end
 
@@ -441,6 +506,33 @@ local function on_tick(event)
 end
 
 --------------------------------------------------------------------------------
+-- Migration
+--------------------------------------------------------------------------------
+
+local function rescan_all()
+    for _, surface in pairs(game.surfaces) do
+        -- Find all qualifying machines on this surface
+        local machines = surface.find_entities_filtered{
+            type = QUALIFYING_TYPE_LIST
+        }
+
+        for _, m in ipairs(machines) do
+            if m.valid and m.unit_number then
+                local buff_effect, quality = entity_effect_underfoot(m)
+
+                local beacon = storage.entity_personal_beacon[m.unit_number]
+                if not (beacon and beacon.valid) then
+                    beacon = create_personal_beacon(m)
+                    storage.entity_personal_beacon[m.unit_number] = beacon
+                end
+
+                update_beacon_bonus(beacon, buff_effect, quality)
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------------
 -- Init
 --------------------------------------------------------------------------------
 
@@ -464,6 +556,7 @@ end)
 script.on_configuration_changed(function()
     ensure_storage()
     rebuild_runtime()
+    rescan_all()
 end)
 
 script.on_load(function()

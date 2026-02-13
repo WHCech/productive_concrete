@@ -30,7 +30,7 @@ data:extend({
     energy_usage = "1W",
 
     module_slots = 1,
-    allowed_effects = { "speed", "productivity" },
+    allowed_effects = { "speed", "productivity", "quality", "consumption" },
 
     radius_visualisation_picture = {
       filename = "__core__/graphics/empty.png",
