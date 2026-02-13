@@ -7,8 +7,7 @@
   "dependencies": [
     "base >= 2.0.0",
     "? space-age",
-    "? quality_concrete"
+    "? quality_concrete >= 0.1.1"
   ],
-  "description": "This mod adds configurable benefits to machines placed on concrete.",
-  "space-age_required": false
+  "description": "This mod adds configurable benefits to machines placed on concrete."
 }
