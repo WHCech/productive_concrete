@@ -16,6 +16,7 @@ local DELAY_TICKS = 5
 local QUALIFYING_TYPES = {
     ["assembling-machine"] = true,
     ["furnace"] = true,
+    ["lab"] = true,
 }
 
 local QUALIFYING_TYPE_LIST = {}

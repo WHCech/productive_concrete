@@ -45,3 +45,4 @@ Mixed tiles or unsupported tiles result in no bonus.
 ## Performance
 
 This mod does not run continuous scanning logic. Outside of build/mining events, it performs no active work and should have a negligible impact on performance.
+
