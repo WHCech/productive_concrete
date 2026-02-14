@@ -9,9 +9,9 @@ When used together with [Quality Concrete](https://mods.factorio.com/mod/quality
 ## Features
 
 - Automatically creates a hidden beacon for:
-  - Assembling machines
-  - Furnaces
-  - Labs
+-- Assembling machines
+-- Furnaces
+-- Labs
 - Applies different module effects depending on tile type
 - Effect and strength can be configured in the mod settings
 

@@ -548,13 +548,16 @@ end
 
 local function rescan_all()
     for _, surface in pairs(game.surfaces) do
-        -- Find all qualifying machines on this surface
-        local machines = surface.find_entities_filtered {
-            type = QUALIFYING_TYPE_LIST
-        }
+        local expected = {}
 
+        -- Scan qualifying machines and (re)apply correct beacon bonus
+        local machines = surface.find_entities_filtered { type = QUALIFYING_TYPE_LIST }
         for _, m in ipairs(machines) do
             if m.valid and m.unit_number then
+                local p = m.position
+                local key = string.format("%d,%d", math.floor(p.x), math.floor(p.y))
+                expected[key] = true
+
                 local buff_effect, quality = entity_effect_underfoot(m)
 
                 local beacon = storage.entity_personal_beacon[m.unit_number]
@@ -562,7 +565,22 @@ local function rescan_all()
                     beacon = create_personal_beacon(m)
                 end
 
-                update_beacon_bonus(beacon, buff_effect, quality)
+                if beacon and beacon.valid then
+                    update_beacon_bonus(beacon, buff_effect, quality)
+                end
+            end
+        end
+
+        -- Remove orphan beacons
+        local beacons = surface.find_entities_filtered { name = BEACON_NAME }
+        for _, b in ipairs(beacons) do
+            if b.valid then
+                local p = b.position
+                local key = string.format("%d,%d", math.floor(p.x), math.floor(p.y))
+
+                if not expected[key] then
+                    b.destroy()
+                end
             end
         end
     end
