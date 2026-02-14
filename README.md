@@ -14,7 +14,6 @@ When used together with [Quality Concrete](https://mods.factorio.com/mod/quality
 - Applies different module effects depending on tile type
 - Effect and strength can be configured in the mod settings
 
-
 #### Supported Tiles
 
 | Tile Type | Default Effect |
@@ -45,4 +44,3 @@ Mixed tiles or unsupported tiles result in no bonus.
 ## Performance
 
 This mod does not run continuous scanning logic. Outside of build/mining events, it performs no active work and should have a negligible impact on performance.
-

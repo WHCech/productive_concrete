@@ -1,6 +1,4 @@
 -- control.lua
--- Concrete Foundations
--- Applies different module bonuses depending on which material fully covers a machine.
 
 local BEACON_NAME = "concrete-beacon"
 
@@ -92,15 +90,39 @@ if script.active_mods["quality_concrete"] and settings.startup["productive_concr
     end
 else
     CONCRETE_TILES = {
-        ["concrete"]                      = "concrete-module",
+        ["concrete"] = {
+            module = "concrete-module",
+            quality = nil,
+            family = "concrete",
+        },
 
-        ["refined-concrete"]              = "refined-concrete-module",
+        ["refined-concrete"] = {
+            module = "refined-concrete-module",
+            quality = nil,
+            family = "refined-concrete",
+        },
 
-        ["hazard-concrete-left"]          = "hazard-concrete-module",
-        ["hazard-concrete-right"]         = "hazard-concrete-module",
+        ["hazard-concrete-left"] = {
+            module = "hazard-concrete-module",
+            quality = nil,
+            family = "hazard-concrete",
+        },
+        ["hazard-concrete-right"] = {
+            module = "hazard-concrete-module",
+            quality = nil,
+            family = "hazard-concrete",
+        },
 
-        ["refined-hazard-concrete-left"]  = "refined-hazard-concrete-module",
-        ["refined-hazard-concrete-right"] = "refined-hazard-concrete-module",
+        ["refined-hazard-concrete-left"] = {
+            module = "refined-hazard-concrete-module",
+            quality = nil,
+            family = "refined-hazard-concrete",
+        },
+        ["refined-hazard-concrete-right"] = {
+            module = "refined-hazard-concrete-module",
+            quality = nil,
+            family = "refined-hazard-concrete",
+        },
     }
 end
 
@@ -117,7 +139,7 @@ local function create_personal_beacon(entity)
     if not (entity and entity.valid and entity.unit_number) then return end
 
     local beacon = storage.entity_personal_beacon[entity.unit_number]
-    if beacon then return beacon end
+    if beacon and beacon.valid then return beacon end
 
     -- Create beacon
     local beacon = entity.surface.create_entity {
@@ -178,25 +200,22 @@ local function entity_effect_underfoot(entity)
         return nil, nil
     end
 
-    local function unpack_effect(v)
-        if not v then return nil, nil end
-        if type(v) == "table" then
-            return v.module, v.quality
-        end
-        -- string mapping (no quality info)
-        return v, nil
-    end
-
     local first = tiles[1]
     local first_val = CONCRETE_TILES[first.name]
-    local first_module, first_quality = unpack_effect(first_val)
+    if not first_val then
+        return nil, nil
+    end
+    local first_module, first_quality = first_val.module, first_val.quality
     if not first_module then
         return nil, nil
     end
 
     for i = 2, n do
         local v = CONCRETE_TILES[tiles[i].name]
-        local m, q = unpack_effect(v)
+        if not v then
+            return nil, nil
+        end
+        local m, q = v.module, v.quality
 
         -- must be fully covered by the same material AND same quality
         if m ~= first_module or q ~= first_quality then
@@ -241,6 +260,9 @@ local function update_machines_near_tiles(surface, tiles)
             if m.valid and m.unit_number and not seen[m.unit_number] then
                 seen[m.unit_number] = true
                 local beacon = storage.entity_personal_beacon[m.unit_number]
+                if not (beacon and beacon.valid) then
+                    beacon = create_personal_beacon(m)
+                end
                 local buff_effect, quality = entity_effect_underfoot(m)
                 update_beacon_bonus(beacon, buff_effect, quality)
             end
@@ -264,8 +286,6 @@ local function recompute_machines_in_area(surface, area)
         local beacon = storage.entity_personal_beacon[m.unit_number]
         if not (beacon and beacon.valid) then
             beacon = create_personal_beacon(m)
-
-            storage.entity_personal_beacon[m.unit_number] = beacon
         end
         update_beacon_bonus(beacon, buff_effect, quality)
     end
@@ -325,8 +345,12 @@ end
 -- Entity Events
 --------------------------------------------------------------------------------
 
+---@param event EventData.on_built_entity
+---| EventData.on_robot_built_entity
+---| EventData.script_raised_built
+---| EventData.script_raised_revive
 local function on_entity_build(event)
-    local entity = event.created_entity or event.entity or event.destination
+    local entity = event.entity
     if not (entity and entity.valid) then return end
     local beacon = create_personal_beacon(entity)
 
@@ -334,8 +358,12 @@ local function on_entity_build(event)
     update_beacon_bonus(beacon, buff_effect, quality)
 end
 
+---@param event EventData.on_player_mined_entity
+---| EventData.on_robot_mined_entity
+---| EventData.on_entity_died
+---| EventData.script_raised_destroy
 local function on_entity_removed(event)
-    local entity = event.created_entity or event.entity or event.destination
+    local entity = event.entity
     if not (entity) then return end
     destroy_personal_beacon(entity)
 end
@@ -343,10 +371,15 @@ end
 --------------------------------------------------------------------------------
 -- Tile Events
 --------------------------------------------------------------------------------
-
+---@param event EventData.on_player_built_tile
+---| EventData.on_robot_built_tile
+---| EventData.on_player_mined_tile
+---| EventData.on_robot_mined_tile
+---| EventData.script_raised_set_tiles
 local function on_tiles_changed(event)
     local surface_index = event.surface_index
-    
+    local surface = game.surfaces[surface_index]
+    if not surface then return end
 
     local player_index = event.player_index
     local s = storage.last_pre_build[player_index]
@@ -373,8 +406,6 @@ local function on_tiles_changed(event)
         return
     end
 
-    local surface = game.surfaces[surface_index]
-    if not surface then return end
     update_machines_near_tiles(surface, event.tiles)
 end
 
@@ -382,6 +413,7 @@ end
 -- Editor instant_deconstruction
 --------------------------------------------------------------------------------
 
+---@param event EventData.on_player_deconstructed_area
 local function custom_handler_editor_instant_deconstruct(event)
     local player = game.get_player(event.player_index)
     if not player then return end
@@ -402,6 +434,7 @@ end
 -- Editor instant_blueprint_building
 --------------------------------------------------------------------------------
 
+---@param event EventData.on_player_cursor_stack_changed
 local function get_tile_count(event)
     local player = game.get_player(event.player_index)
     if not player then return end
@@ -419,6 +452,7 @@ local function get_tile_count(event)
     storage.bp_tilecount[event.player_index] = tiles or 0
 end
 
+---@param event EventData.on_pre_build
 local function on_pre_build(event)
     local player = game.get_player(event.player_index)
     if not player then return end
@@ -441,6 +475,7 @@ end
 -- Editor Undo
 --------------------------------------------------------------------------------
 
+---@param event EventData.on_undo_applied
 local function on_undo(event)
     local player = game.get_player(event.player_index)
     if not player then return end
@@ -485,6 +520,7 @@ end
 -- Editor on TIck
 --------------------------------------------------------------------------------
 
+---@param event EventData.on_tick
 local function on_tick(event)
     local t = storage.run_area_recompute_at
     if not t then return end
@@ -513,7 +549,7 @@ end
 local function rescan_all()
     for _, surface in pairs(game.surfaces) do
         -- Find all qualifying machines on this surface
-        local machines = surface.find_entities_filtered{
+        local machines = surface.find_entities_filtered {
             type = QUALIFYING_TYPE_LIST
         }
 
@@ -524,7 +560,6 @@ local function rescan_all()
                 local beacon = storage.entity_personal_beacon[m.unit_number]
                 if not (beacon and beacon.valid) then
                     beacon = create_personal_beacon(m)
-                    storage.entity_personal_beacon[m.unit_number] = beacon
                 end
 
                 update_beacon_bonus(beacon, buff_effect, quality)

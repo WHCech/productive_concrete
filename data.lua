@@ -17,7 +17,6 @@ local function apply_choice(module_name, effect_setting, value_setting)
     if not proto or not key then return end
 
     proto.effect = proto.effect or {}
-    -- ensure ONLY the selected effect applies
     proto.effect.speed = nil
     proto.effect.productivity = nil
     proto.effect.consumption = nil
