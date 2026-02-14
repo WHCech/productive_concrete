@@ -11,6 +11,7 @@ When used together with [Quality Concrete](https://mods.factorio.com/mod/quality
 - Automatically creates a hidden beacon for:
   - Assembling machines
   - Furnaces
+  - Labs
 - Applies different module effects depending on tile type
 - Effect and strength can be configured in the mod settings
 
@@ -25,14 +26,14 @@ When used together with [Quality Concrete](https://mods.factorio.com/mod/quality
 
 A machine must be **fully on the same supported tile** to receive the bonus.
 
-Mixed tiles or unsupported tiles result in no bonus.
+Mixed or unsupported tiles result in no bonus.
 
 ---
 
 ## How It Works
 
 1. When a qualifying machine is built:
-   - A hidden beacon (`concrete-beacon`) is created at the machines position.
+   - A hidden beacon (`concrete-beacon`) is created at the machine's position.
 2. When tiles under a machine change:
    - The mod checks if the machine is fully on a supported tile.
    - The beacon module is updated accordingly.
