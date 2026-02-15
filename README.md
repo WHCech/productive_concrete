@@ -33,12 +33,12 @@ Mixed or unsupported tiles result in no bonus.
 ## How It Works
 
 1. When a qualifying machine is built:
-   - A hidden beacon (`concrete-beacon`) is created at the machine's position.
+  A hidden beacon (`concrete-beacon`) is created at the machine's position.
 2. When tiles under a machine change:
-   - The mod checks if the machine is fully on a supported tile.
-   - The beacon module is updated accordingly.
+  The mod checks if the machine is fully on a supported tile.
+  The beacon module is updated accordingly.
 3. When a machine is removed:
-   - Its corresponding beacon is destroyed.
+  Its corresponding beacon is destroyed.
 
 ---
 
