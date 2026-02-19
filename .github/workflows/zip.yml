@@ -1,0 +1,42 @@
+name: Build mod artifact
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read mod name + version from info.json
+        id: mod
+        run: |
+          NAME=$(jq -r '.name' info.json)
+          VER=$(jq -r '.version' info.json)
+
+          if [ -z "$NAME" ] || [ "$NAME" = "null" ]; then
+            echo "info.json missing .name" >&2
+            exit 1
+          fi
+          if [ -z "$VER" ] || [ "$VER" = "null" ]; then
+            echo "info.json missing .version" >&2
+            exit 1
+          fi
+
+          echo "FOLDER=${NAME}_${VER}" >> $GITHUB_OUTPUT
+
+      - name: Export tracked files into bundle/FOLDER
+        run: |
+          FOLDER="${{ steps.mod.outputs.FOLDER }}"
+          mkdir -p "bundle/$FOLDER"
+          git archive HEAD | tar -x -C "bundle/$FOLDER"
+
+      - name: Upload artifact (zip will contain FOLDER/)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.mod.outputs.FOLDER }}
+          path: bundle
